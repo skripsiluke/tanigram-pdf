@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#176b52">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>Tanigram PDF — Pembuat Laporan</title>
+<style>
+:root{--green:#176b52;--green2:#e8f4ef;--ink:#1f2937;--muted:#64748b;--line:#dbe4e0;--paper:#fff}
+*{box-sizing:border-box}body{margin:0;background:#f3f6f5;color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{background:var(--green);color:white;padding:22px 18px}header h1{font-size:1.35rem;margin:0 0 4px}header p{margin:0;color:#e1f2eb;font-size:.92rem}
+main{max-width:900px;margin:18px auto;padding:0 14px 32px}.panel{background:white;border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px;box-shadow:0 2px 8px #153b2a0a}
+h2{font-size:1.05rem;margin:0 0 10px}.hint{color:var(--muted);font-size:.88rem;margin:0 0 12px}
+textarea,input{font:inherit;width:100%;border:1px solid #cbd5d1;border-radius:9px;padding:11px;background:white;color:var(--ink)}
+textarea{min-height:190px;resize:vertical}label{display:block;font-weight:650;font-size:.9rem;margin:12px 0 5px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:12px}
+button{border:0;border-radius:10px;padding:11px 15px;font:600 .95rem system-ui;cursor:pointer;background:var(--green);color:white}
+button.secondary{background:var(--green2);color:var(--green);border:1px solid #b9d9cc}button:active{transform:translateY(1px)}
+.status{font-size:.88rem;color:var(--muted);margin-top:9px;min-height:1.2em}.preview{background:#f8faf9;border:1px dashed #cbd5d1;border-radius:10px;padding:12px}
+.preview dl{display:grid;grid-template-columns:minmax(115px, 34%) 1fr;gap:8px;margin:0}.preview dt{color:var(--muted);font-size:.9rem}.preview dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+footer{text-align:center;color:var(--muted);font-size:.82rem;padding:8px 14px 22px}
+@media(max-width:560px){.row{grid-template-columns:1fr}.panel{padding:13px}.preview dl{grid-template-columns:1fr;gap:2px}.preview dd{margin-bottom:9px}}
+@media print{
+ body{background:white;font:11pt/1.4 Arial,sans-serif;color:#111}header,.no-print,footer{display:none!important}main{max-width:none;margin:0;padding:0}.panel{border:0;box-shadow:none;border-radius:0;padding:0;margin:0 0 14px}.print-title{display:block!important}.preview{border:0;padding:0;background:white}.preview dl{grid-template-columns:32% 1fr;gap:7px}.preview dt{color:#333}h2{font-size:13pt;border-bottom:1px solid #777;padding-bottom:5px}.print-meta{display:block!important} @page{size:A4;margin:18mm 16mm}
+}
+</style>
+</head>
+<body>
+<header>
+  <h1>Tanigram PDF</h1>
+  <p>Pembuat PDF laporan lapangan · prototipe Android</p>
+</header>
+<main>
+  <section class="panel no-print">
+    <h2>1. Tempel teks laporan</h2>
+    <p class="hint">Di Tanigram, salin seluruh teks laporan. Kembali ke sini, tekan “Tempel dari clipboard” atau tempel manual ke kotak di bawah.</p>
+    <textarea id="source" placeholder="Tempel seluruh teks laporan Tanigram di sini…"></textarea>
+    <div class="actions">
+      <button id="paste">Tempel dari clipboard</button>
+      <button id="parse" class="secondary">Baca laporan</button>
+      <button id="clear" class="secondary">Kosongkan</button>
+    </div>
+    <div id="status" class="status" role="status">Data diproses di perangkat ini; tidak dikirim ke server.</div>
+  </section>
+  <section class="panel">
+    <div class="print-title" style="display:none;text-align:center;margin-bottom:18px">
+      <h1 style="font-size:18pt;margin:0">LAPORAN KUNJUNGAN LAPANGAN</h1>
+      <div id="printSub" style="margin-top:4px"></div>
+    </div>
+    <h2 class="no-print">2. Pratinjau laporan</h2>
+    <div class="row no-print">
+      <div><label for="reportTitle">Judul laporan</label><input id="reportTitle" value="Laporan Kunjungan Lapangan"></div>
+      <div><label for="reportDate">Tanggal laporan (jika diketahui)</label><input id="reportDate" placeholder="Contoh: 22 Oktober 2026"></div>
+    </div>
+    <div class="preview" style="margin-top:12px">
+      <dl id="fields"></dl>
+    </div>
+    <div class="actions no-print">
+      <button id="pdf">Cetak / Simpan sebagai PDF</button>
+      <button id="copyJson" class="secondary">Salin data terstruktur</button>
+    </div>
+    <p class="hint no-print" style="margin-top:10px">Di Android, pilih “Simpan sebagai PDF” pada pilihan printer/tujuan cetak. Jika dialog cetak tidak terbuka, buka menu Chrome → Bagikan/Cetak bila tersedia.</p>
+  </section>
+</main>
+<footer>Versi prototipe · Periksa kembali hasil ekstraksi sebelum menyimpan PDF.</footer>
+<script>
+const $=id=>document.getElementById(id);
+const keys=[
+ ["Nama petani / kelompok tani",["nama petani","petani","kelompok tani","poktan"]],
+ ["Tanggal kunjungan",["tanggal kunjungan","tanggal laporan","tanggal"]],
+ ["Jenis kegiatan",["jenis kegiatan","kegiatan"]],
+ ["Komoditas",["komoditas"]],
+ ["Luas lahan",["luas lahan","luas"]],
+ ["Fase / kondisi tanaman",["fase tanam","fase tanaman","kondisi tanaman","umur tanaman","umur"]],
+ ["Lokasi / alamat",["lokasi","alamat","desa","kecamatan"]],
+ ["Koordinat GPS",["koordinat","gps","latitude","longitude"]],
+ ["Permasalahan",["permasalahan","masalah","kendala"]],
+ ["Solusi / rekomendasi",["solusi","rekomendasi","tindak lanjut"]],
+ ["Hasil / output",["hasil/output","hasil","output"]]
+];
+let parsed={};
+function normalize(s){return s.replace(/\u00a0/g,' ').replace(/\r/g,'').trim()}
+function extract(text){
+ const lines=normalize(text).split('\n').map(x=>x.trim()).filter(Boolean);
+ const result={};
+ for(const [label,aliases] of keys){
+   let found='';
+   for(let i=0;i<lines.length;i++){
+     const line=lines[i];
+     const clean=line.replace(/^[•\-*]\s*/,'');
+     const colon=clean.match(/^([^:：]{2,70})\s*[:：]\s*(.*)$/);
+     if(colon){
+       const lhs=colon[1].toLowerCase().trim();
+       if(aliases.some(a=>lhs===a || lhs.includes(a))){
+         found=colon[2].trim();
+         if(!found && lines[i+1]) found=lines[i+1];
+         break;
+       }
+     }
+     if(aliases.some(a=>clean.toLowerCase()===a)){
+       found=lines[i+1]||'';break;
+     }
+   }
+   result[label]=found;
+ }
+ // Keep complete source text as a fallback so unrecognized fields aren't silently lost.
+ result["Teks laporan asli"]=normalize(text);
+ return result;
+}
+function render(){
+ const data=extract($('source').value); parsed=data;
+ const dl=$('fields'); dl.innerHTML='';
+ const title=$('reportTitle').value.trim()||'Laporan Kunjungan Lapangan';
+ $('printSub').textContent=$('reportDate').value.trim();
+ for(const [k,v] of Object.entries(data)){
+   if(k==='Teks laporan asli' && !v) continue;
+   const dt=document.createElement('dt');dt.textContent=k;
+   const dd=document.createElement('dd');dd.textContent=v||'(Tidak terdeteksi — periksa teks asli)';
+   dl.append(dt,dd);
+ }
+ $('status').textContent=$('source').value.trim()?'Laporan dibaca. Periksa pratinjau dan lengkapi data yang belum terdeteksi.':'Tempel teks laporan untuk memulai.';
+}
+$('paste').addEventListener('click',async()=>{
+ try{if(!navigator.clipboard?.readText) throw new Error('Clipboard tidak didukung di konteks ini.');$('source').value=await navigator.clipboard.readText();render();}
+ catch(e){$('status').textContent='Tidak dapat membaca clipboard otomatis. Tekan lama kotak teks lalu pilih Tempel.';}
+});
+$('parse').addEventListener('click',render);
+$('clear').addEventListener('click',()=>{$('source').value='';$('reportTitle').value='Laporan Kunjungan Lapangan';$('reportDate').value='';render();});
+$('pdf').addEventListener('click',()=>{render();window.print();});
+$('copyJson').addEventListener('click',async()=>{
+ render();try{await navigator.clipboard.writeText(JSON.stringify({judul:$('reportTitle').value,tanggal:$('reportDate').value,data:parsed},null,2));$('status').textContent='Data terstruktur disalin.';}
+ catch(e){$('status').textContent='Clipboard tidak tersedia. Anda dapat menyalin teks laporan asli secara manual.';}
+});
+$('reportTitle').addEventListener('input',()=>{});
+render();
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
